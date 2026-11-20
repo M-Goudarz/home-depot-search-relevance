@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE and local configuration
+.vscode/
+.idea/
+.claude/
+.freebuff/
+
+# Model artifacts and weights
+*.pkl
+*.joblib
+*.safetensors
+*.pt
+*.bin
+local_mini_bert_model/
+models/
+artifacts/
+
+# Generated outputs
+submission.csv
+output/
+outputs/
+logs/
+
+# Dataset files
+/data/*
+!/data/README.md
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
