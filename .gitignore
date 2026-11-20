@@ -43,3 +43,14 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+
+# Test and coverage reports
+.coverage
+.coverage.*
+htmlcov/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/

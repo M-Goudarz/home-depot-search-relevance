@@ -15,7 +15,7 @@ from .config import AppConfig
 from .data import build_test_frame, build_training_frame, load_raw_data
 from .embeddings import load_embedding_model
 from .evaluation import evaluate_predictions
-from .features import add_clean_columns, add_lexical_features
+from .features import add_clean_columns, add_lexical_features, build_feature_matrix
 from .inference import load_and_predict
 from .training import (
     cross_validate,
@@ -35,26 +35,36 @@ def train_command(args: argparse.Namespace) -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print("Loading data...")
-    raw = load_raw_data(data_dir)
-    train_frame = build_training_frame(raw)
-    test_frame = build_test_frame(raw)
+    if args.use_cached_features:
+        print("Loading cached feature frames...")
+        train_frame = pd.read_parquet("outputs/train_features.parquet")
+        test_frame = pd.read_parquet("outputs/test_features.parquet")
+        if train_frame["bert_semantic_title_sim"].isna().any():
+            raise ValueError("Cached training features still contain missing BERT values")
+        if test_frame["bert_semantic_title_sim"].isna().any():
+            raise ValueError("Cached test features still contain missing BERT values")
+    else:
+        print("Loading data...")
+        raw = load_raw_data(data_dir)
+        train_frame = build_training_frame(raw)
+        test_frame = build_test_frame(raw)
 
-    print("Preparing text and lexical features...")
-    train_frame = add_clean_columns(train_frame)
-    train_frame = add_lexical_features(train_frame)
-    test_frame = add_clean_columns(test_frame)
-    test_frame = add_lexical_features(test_frame)
+        print("Preparing text and lexical features...")
+        train_frame = add_clean_columns(train_frame)
+        train_frame = add_lexical_features(train_frame)
+        test_frame = add_clean_columns(test_frame)
+        test_frame = add_lexical_features(test_frame)
 
     print("Loading embedding model...")
     embedding_model = load_embedding_model(config.model.embedding_model_name)
 
-    print("Computing semantic features for training data...")
-    from .features import add_bert_features
+    if not args.use_cached_features:
+        print("Computing semantic features for training data...")
+        from .features import add_bert_features
 
-    train_frame = add_bert_features(train_frame, embedding_model, config.model.embedding_batch_size)
-    print("Computing semantic features for test data...")
-    test_frame = add_bert_features(test_frame, embedding_model, config.model.embedding_batch_size)
+        train_frame = add_bert_features(train_frame, embedding_model, config.model.embedding_batch_size)
+        print("Computing semantic features for test data...")
+        test_frame = add_bert_features(test_frame, embedding_model, config.model.embedding_batch_size)
 
     print("Creating group-aware train/validation split...")
     train_split, val_split = group_train_validation_split(
@@ -185,6 +195,11 @@ def build_parser() -> argparse.ArgumentParser:
     train_parser.add_argument("--artifact-path", default="artifacts/search_relevance_model.joblib")
     train_parser.add_argument("--output-dir", default="outputs")
     train_parser.add_argument("--skip-cv", action="store_true")
+    train_parser.add_argument(
+        "--use-cached-features",
+        action="store_true",
+        help="Load outputs/train_features.parquet and outputs/test_features.parquet.",
+    )
     train_parser.set_defaults(func=train_command)
 
     predict_parser = subparsers.add_parser("predict", help="Run batch prediction")

@@ -1,8 +1,4 @@
-import math
-
-import numpy as np
 import pandas as pd
-import pytest
 
 from hd_search_relevance.preprocessing import clean_text
 

@@ -11,13 +11,6 @@ import pandas as pd
 from .artifacts import load_artifact
 from .config import ModelConfig
 from .embeddings import load_embedding_model
-from .features import (
-    add_bert_features,
-    add_clean_columns,
-    add_lexical_features,
-    add_tfidf_features,
-    build_feature_matrix,
-)
 from .training import prepare_test_features
 
 
@@ -93,15 +86,60 @@ def rank_candidates(
     return scored.drop(columns=["_score"])
 
 
+def score_candidates(
+    query: str,
+    candidates: list[dict[str, Any]],
+    artifact: dict[str, Any],
+    embedding_model: Any | None = None,
+) -> pd.DataFrame:
+    """Score and rank candidate products for one search query.
+
+    Candidate dictionaries may contain ``title``, ``description``, and ``brand``.
+    Rows without a title are ignored. The returned frame is sorted by predicted
+    relevance with a 1-based ``rank`` column.
+    """
+    query = "" if query is None else str(query).strip()
+    if not query:
+        raise ValueError("A non-empty search query is required")
+
+    rows: list[dict[str, Any]] = []
+    for candidate in candidates:
+        title = str(candidate.get("title", "") or "").strip()
+        if not title:
+            continue
+        rows.append(
+            {
+                "product_title": title,
+                "product_description": str(candidate.get("description", "") or ""),
+                "product_brand": str(candidate.get("brand", "Unknown") or "Unknown"),
+                "search_term": query,
+            }
+        )
+
+    if not rows:
+        raise ValueError("At least one candidate with a product title is required")
+
+    frame = pd.DataFrame(rows)
+    scored = predict_frame(frame, artifact, embedding_model=embedding_model, clip=True)
+    scored = scored.sort_values("predicted_relevance", ascending=False).reset_index(drop=True)
+    scored["rank"] = range(1, len(scored) + 1)
+    return scored
+
+
 def load_and_predict(
     input_path: Path | str,
     artifact_path: Path | str,
     output_path: Path | str | None = None,
 ) -> pd.DataFrame:
     """CLI-friendly prediction from CSV to CSV."""
-    frame = pd.read_csv(input_path)
+    try:
+        frame = pd.read_csv(input_path)
+    except UnicodeDecodeError:
+        frame = pd.read_csv(input_path, encoding="ISO-8859-1")
     artifact = load_artifact(artifact_path)
-    scored = predict_frame(frame, artifact)
+    local_model = Path("local_mini_bert_model")
+    embedding_model = load_embedding_model(str(local_model)) if local_model.exists() else None
+    scored = predict_frame(frame, artifact, embedding_model=embedding_model)
     if output_path is not None:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)

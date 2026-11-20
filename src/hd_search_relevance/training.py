@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -25,8 +25,6 @@ from .features import (
 def _ensure_base_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = frame.copy()
     if "clean_search_term" not in result.columns:
-        from .features import add_clean_columns
-
         result = add_clean_columns(result)
     if "search_len" not in result.columns:
         result = add_lexical_features(result)
